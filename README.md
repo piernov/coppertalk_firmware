@@ -1,5 +1,7 @@
 ```
-source ~/zephyrproject/zephyr/zephyr-env.sh
-west build -b coppertalk
-west flash
+west espressif update
+```
+
+```
+west build -b esp32
 ```

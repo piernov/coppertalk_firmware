@@ -1,5 +1,7 @@
 #include <zephyr/zephyr.h>
 
+#include "esp_log.h"
+
 #include "node_table.h"
 
 void nt_touch(node_table_t* table, uint8_t node) {

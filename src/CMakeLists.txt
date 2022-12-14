@@ -1,7 +1,7 @@
 target_sources(app PRIVATE
 	 buffer_pool.c
 	 led.c
-	 #wifi.c
+	 wifi.c
 	 ip.c
 	 uart.c
 	 tashtalk.c
@@ -12,11 +12,9 @@ target_sources(app PRIVATE
 	 #scan_manager.c
 	 packet_utils.c
 	 pstrings.c
-	 #storage.c
-	 #recovery_listener.c
+	 storage.c
+	 recovery_listener.c
 	 #recovery.c
-	 network.c
-#	 usb.c
 	 main.c
 )
 

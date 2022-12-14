@@ -2,9 +2,11 @@
 #include <zephyr/net/socket.h>
 #include <zephyr/net/igmp.h>
 
+#include "esp_log.h"
+
 #include "packet_types.h"
 #include "buffer_pool.h"
-#include "network.h"
+#include "wifi.h"
 #include "led.h"
 #include "crc.h"
 #include "uart.h"
@@ -23,8 +25,8 @@ struct k_thread udp_tx_task;
 struct k_msgq *udp_tx_queue = NULL;
 struct k_msgq *udp_rx_queue = NULL;
 
-K_THREAD_STACK_DEFINE(udp_rx_stack, 768);
-K_THREAD_STACK_DEFINE(udp_tx_stack, 768);
+K_THREAD_STACK_DEFINE(udp_rx_stack, 4096);
+K_THREAD_STACK_DEFINE(udp_tx_stack, 4096);
 
 node_table_t forward_for_nodes = { 0 };
 
@@ -33,28 +35,25 @@ void udp_error() {
 }
 
 void init_udp(void) {
-	printk("init_udp\n");
 	struct sockaddr_in saddr = { 0 };
 	int sock = -1;
 	int err = 0;
 	
-	/* bail out early if we don't have a network interface yet */
+	/* bail out early if we don't have a wifi network interface yet */
 	
-	struct net_if * iface = get_network_interface();
-	if (iface == NULL) {
+	struct net_if * wifi_if = get_wifi_intf();
+	if (wifi_if == NULL) {
 		printk("wireless network interface does not exist.\n");
 		udp_error();
 		return;
 	}
-	printk("iface present\n");
 	
 	/* or if doesn't think it's ready */
-	if (!is_network_ready()) {
+	if (!is_wifi_ready()) {
 		printk("wireless network interface is not ready.\n");
 		udp_error();
 		return;
 	};
-	printk("network ready\n");
 	
 	/* create the multicast socket and twiddle its socket options */
 
@@ -64,7 +63,6 @@ void init_udp(void) {
 		udp_error();
 		return;
 	}
-	printk("socket created\n");
 	
 	saddr.sin_family = PF_INET;
 	saddr.sin_port = htons(1954);
@@ -75,7 +73,6 @@ void init_udp(void) {
 		udp_error();
 		goto err_cleanup;
 	}
-	printk("socket bound\n");
 		
 	struct sockaddr_in addr;
 	err = inet_pton(AF_INET, "239.192.76.84", &addr.sin_addr);
@@ -84,21 +81,18 @@ void init_udp(void) {
 		udp_error();
 		goto err_cleanup;
 	}
-	printk("address generated\n");
 
-	struct net_if_mcast_addr *ret = net_if_ipv4_maddr_add(iface, &addr.sin_addr);
+	struct net_if_mcast_addr *ret = net_if_ipv4_maddr_add(wifi_if, &addr.sin_addr);
 	if (ret == NULL) {
 		printk("net_if_ipv4_maddr_add() failed, error: %d\n", errno);
 		udp_error();
 		goto err_cleanup;
 	}
-	printk("multicast address added\n");
 
-	err = net_ipv4_igmp_join(iface, &addr.sin_addr);
+	err = net_ipv4_igmp_join(wifi_if, &addr.sin_addr);
 	if (err) {
 		printk("net_ipv4_igmp_join error: %d\n", err);
 	}
-	printk("igmp group joined\n");
 	 
 	udp_sock = sock;
 	
@@ -108,9 +102,7 @@ void init_udp(void) {
 
 	
 err_cleanup:
-	if (sock != -1) {
-		close(sock);
-	}
+	close(sock);
 	udp_error();
 	return;
 
@@ -123,14 +115,13 @@ void udp_rx_runloop(void *p1, void *p2, void *p3) {
 	while(1) {
 		/* retry if we need to */
 		while(udp_sock == -1) {
-			printk("setting up LToUDP listener failed.\n");
+			printk("setting up LToUDP listener failed.  Retrying...\n");
 			k_msleep(1000);
-			printk("Retrying...\n");
 			init_udp();
 		}
 	
 		while(1) {
-			static unsigned char buffer[603+4]; // 603 for LLAP (per Inside Appletalk) + 
+			unsigned char buffer[603+4]; // 603 for LLAP (per Inside Appletalk) + 
 										 // 4 bytes LToUDP header
 			int len = recv(udp_sock, buffer, sizeof(buffer), 0);
 			//printk("Received UDP packet\n");
@@ -156,7 +147,6 @@ void udp_rx_runloop(void *p1, void *p2, void *p3) {
 			
 				// fetch an empty buffer from the pool and fill it with
 				// packet info
-				//printk("bp_fetch ip.c %d\n", packet_pool);
 				llap_packet* lp = bp_fetch(packet_pool);
 				if (lp != NULL) {
 					crc_state_t crc;
@@ -185,10 +175,10 @@ void udp_rx_runloop(void *p1, void *p2, void *p3) {
 
 void udp_tx_runloop(void *p1, void *p2, void *p3) {
 	//printk("udp_tx_runloop 0\n");
-	static llap_packet* packet = NULL;
-	static unsigned char outgoing_buffer[605 + 4] = { 0 }; // LToUDP has 4 byte header
-	static struct sockaddr_in dest_addr = {0};
-	static int err = 0;
+	llap_packet* packet = NULL;
+	unsigned char outgoing_buffer[605 + 4] = { 0 }; // LToUDP has 4 byte header
+	struct sockaddr_in dest_addr = {0};
+	int err = 0;
 
 	//printk("udp_tx_runloop 1\n");
 		
@@ -196,7 +186,7 @@ void udp_tx_runloop(void *p1, void *p2, void *p3) {
 	dest_addr.sin_family = AF_INET;
 	dest_addr.sin_port = htons(1954);
 	
-	printk("starting LToUDP sender\n");
+	ESP_LOGI(TAG, "starting LToUDP sender");
 	
 	while(1) {
 		k_msgq_get(udp_tx_queue, &packet, K_FOREVER);
@@ -232,7 +222,7 @@ void udp_tx_runloop(void *p1, void *p2, void *p3) {
 				(struct sockaddr *)&dest_addr, sizeof(dest_addr));
 			//printk("udp_tx_runloop 2.3.2\n");
 			if (err < 0) {
-				printk("error: sendto: errno %d\n", errno);
+				ESP_LOGE(TAG, "error: sendto: errno %d", errno);
 				flash_led_once(UDP_RED_LED);
 			} else {
 				flash_led_once(UDP_TX_LED);
@@ -242,7 +232,6 @@ void udp_tx_runloop(void *p1, void *p2, void *p3) {
 		}
 				
 skip_processing:
-		//printk("bp_relinquish ip\n");
 		bp_relinquish(packet_pool, (void**)&packet);
 		//printk("udp_tx_runloop 2.4\n");
 	}
@@ -254,18 +243,16 @@ void start_udp(buffer_pool_t* pool, struct k_msgq *txQueue, struct k_msgq *rxQue
 	packet_pool = pool;
 	udp_tx_queue = txQueue;
 	udp_rx_queue = rxQueue;
-        k_tid_t udp_rx_thread = k_thread_create(&udp_rx_task, udp_rx_stack,
+        k_thread_create(&udp_rx_task, udp_rx_stack,
                         K_THREAD_STACK_SIZEOF(udp_rx_stack),
                         udp_rx_runloop,
                         NULL, NULL, NULL,
                         THREAD_UDP_RX_PRIORITY, 0, K_NO_WAIT);
-	k_thread_name_set(udp_rx_thread, "udp_rx");
-        k_tid_t udp_tx_thread = k_thread_create(&udp_tx_task, udp_tx_stack,
+        k_thread_create(&udp_tx_task, udp_tx_stack,
                         K_THREAD_STACK_SIZEOF(udp_tx_stack),
                         udp_tx_runloop,
                         NULL, NULL, NULL,
                         THREAD_UDP_TX_PRIORITY, 0, K_NO_WAIT);
-	k_thread_name_set(udp_tx_thread, "udp_tx");
 
 
 }

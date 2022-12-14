@@ -1,6 +1,8 @@
 #include <zephyr/zephyr.h>
 #include <zephyr/drivers/gpio.h>
 
+#include "esp_log.h"
+
 #include "led.h"
 
 #define FLASH_LENGTH 125
@@ -25,17 +27,13 @@ typedef struct {
 	int gpio_state;
 } led_config_t;
 
-//#define LED_COUNT 11
-#define LED_COUNT 9
-//#define LED_COUNT 1
-
-static led_config_t led_config[LED_COUNT] = {
+static led_config_t led_config[] = {
 	[WIFI_RED_LED] = {
 		.enabled = 1,
 		.name = "WIFI_RED_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(wifi_red_led), gpios)
 	},
-#if 1
+	
 	[WIFI_GREEN_LED] = {
 		.enabled = 1,
 		.name = "WIFI_GREEN_LED",
@@ -46,42 +44,42 @@ static led_config_t led_config[LED_COUNT] = {
 		.enabled = 1,
 		.name = "UDP_RED_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(udp_red_led), gpios),
-//		.also = ANY_ERR_LED
+		.also = ANY_ERR_LED
 	},
 	
 	[UDP_TX_LED] = {
 		.enabled = 1,
 		.name = "UDP_TX_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(udp_tx_led), gpios),
-//		.also = ANY_ACT_LED
+		.also = ANY_ACT_LED
 	},
 	
 	[UDP_RX_LED] = {
 		.enabled = 1,
 		.name = "UDP_RX_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(udp_rx_led), gpios),
-//		.also = ANY_ACT_LED
+		.also = ANY_ACT_LED
 	},
 	
 	[LT_RED_LED] = {
 		.enabled = 1,
 		.name = "LT_RED_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(lt_red_led), gpios),
-//		.also = ANY_ERR_LED
+		.also = ANY_ERR_LED
 	},
 	
 	[LT_TX_LED] = {
 		.enabled = 1,
 		.name = "LT_TX_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(lt_tx_led), gpios),
-//		.also = ANY_ACT_LED
+		.also = ANY_ACT_LED
 	},
 	
 	[LT_RX_LED] = {
 		.enabled = 1,
 		.name = "LT_RX_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(lt_rx_led), gpios),
-//		.also = ANY_ACT_LED
+		.also = ANY_ACT_LED
 	},
 	
 	[OH_NO_LED] = {
@@ -89,8 +87,7 @@ static led_config_t led_config[LED_COUNT] = {
 		.name = "OH_NO_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(oh_no_led), gpios)
 	},
-#endif
-#if 0
+	
 	[ANY_ERR_LED] = {
 		.enabled = 1,
 		.name = "ANY_ERR_LED",
@@ -102,10 +99,9 @@ static led_config_t led_config[LED_COUNT] = {
 		.name = "ANY_ACT_LED",
 		.gpio_pin = GPIO_DT_SPEC_GET(DT_ALIAS(generic_act_led), gpios)
 	},
-#endif
 };
 
-K_THREAD_STACK_ARRAY_DEFINE(led_stacks, LED_COUNT, 256);
+K_THREAD_STACK_ARRAY_DEFINE(led_stacks, sizeof(led_config) / sizeof(led_config[0]), 1024);
 
 /* led_init sets up gpio pins and starts the background tasks for each LED */
 void led_init(void) {
@@ -136,7 +132,6 @@ void led_init(void) {
 						 led_runloop,
 						 (void *)i, NULL, NULL,
 						 THREAD_LED_PRIORITY, 0, K_NO_WAIT);
-		k_thread_name_set(tid, led_config[i].name);
 		k_event_init(&led_config[i].event);
 	}
 }
@@ -158,30 +153,23 @@ void led_runloop(void* param, void *p2, void *p3) {
 	}
 }
 
-bool check_led(LED led) {
-	static const int num_of_leds = sizeof(led_config) / sizeof(led_config[0]);
-	if (led >= num_of_leds || !led_config[led].enabled) {
-		printk("attempt to flash illicit LED: %d\n", led);
-		return false;
-	}
-	return true;
-}
-
 void turn_led_on(LED led) {
-	if (!check_led(led)) return;
 	led_config[led].gpio_state = 1;
 	gpio_pin_set_dt(&led_config[led].gpio_pin, 1);
 }
 
 void turn_led_off(LED led) {
-	if (!check_led(led)) return;
 	led_config[led].gpio_state = 0;
 	gpio_pin_set_dt(&led_config[led].gpio_pin, 0);
 }
 
 
 void flash_led_once(LED led) {
-	if (!check_led(led)) return;
+	int num_of_leds = sizeof(led_config) / sizeof(led_config[0]);
+	
+	if (led >= num_of_leds || !led_config[led].enabled) {
+		printk("attempt to flash illicit LED: %d\n", led);
+	}
 	
 	k_event_post(&led_config[led].event, 0x1);
 	
@@ -215,14 +203,3 @@ void turn_all_leds_on(void) {
 	}
 }
 
-void turn_all_leds_off(void) {
-	int num_of_leds = sizeof(led_config) / sizeof(led_config[0]);
-	
-	for(int i = 0; i < num_of_leds; i++) {
-		if (led_config[i].enabled != 1) {
-			continue;
-		}
-		
-		turn_led_off(i);
-	}
-}

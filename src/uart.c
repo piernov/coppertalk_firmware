@@ -2,14 +2,13 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
-#include <zephyr/drivers/gpio.h>
-
-#include <stm32f1xx_ll_usart.h>
-#include <stm32f1xx_ll_gpio.h>
 
 #include <time.h>
 #include <string.h>
-#include <stdio.h>
+
+#include "esp_system.h"
+#include "esp_log.h"
+#include "driver/gpio.h"
 
 #include "led.h"
 #include "tashtalk.h"
@@ -19,12 +18,8 @@
 
 #include "uart.h"
 
-#define THREAD_UART_RX_PRIORITY 4
-#define THREAD_UART_TX_PRIORITY 3
-
-static const struct gpio_dt_spec ttcts = GPIO_DT_SPEC_GET(DT_ALIAS(tt_cts), gpios);
-//static const struct gpio_dt_spec ttcts2 = GPIO_DT_SPEC_GET(DT_ALIAS(tt_cts2), gpios);
-
+#define THREAD_UART_RX_PRIORITY 5
+#define THREAD_UART_TX_PRIORITY 5
 
 static const char* TAG = "uart";
 
@@ -38,14 +33,17 @@ struct k_thread uart_tx_task;
 struct k_msgq *uart_rx_queue = NULL;
 struct k_msgq *uart_tx_queue = NULL;
 
-K_THREAD_STACK_DEFINE(uart_rx_stack, 512);
-K_THREAD_STACK_DEFINE(uart_tx_stack, 512);
+K_THREAD_STACK_DEFINE(uart_rx_stack, 4096);
+K_THREAD_STACK_DEFINE(uart_tx_stack, 4096);
 
-#define RX_BUFFER_SIZE 768
-K_MSGQ_DEFINE(uart_msgq, sizeof(char), RX_BUFFER_SIZE, 1); // Store each character separately in the queue, not the most efficient but hopefully good enough
+#define RX_BUFFER_SIZE 1024
+K_MSGQ_DEFINE(uart_msgq, sizeof(char), 1024, 4); // Store each character separately in the queue, not the most efficient but hopefully good enough
+
+//uint8_t uart_buffer[RX_BUFFER_SIZE];
+
 
 void uart_write_node_table(node_update_packet_t* packet) {
-	//printk("BEGIN uart_write_node_table\n");
+	printk("BEGIN uart_write_node_table\n");
 	uart_poll_out(uart_dev, '\x02');
 	for (size_t i = 0; i < 32; i++) {
 		uart_poll_out(uart_dev, packet->nodebits[i]);
@@ -54,13 +52,13 @@ void uart_write_node_table(node_update_packet_t* packet) {
 	//uart_tx(uart_dev, (char*)packet->nodebits, 32, SYS_FOREVER_US);
 	
 	// debugomatic
-	static char debugbuff[97] = {0};
+	char debugbuff[97] = {0};
 	char* ptr = debugbuff;
 	for (int i = 0; i < 32; i++) {
 		ptr += sprintf(ptr, "%02X ", packet->nodebits[i]);
 	}
 	printk("sent nodebits: %s\n", debugbuff);
-	//printk("END uart_write_node_table \n");
+	printk("END uart_write_node_table \n");
 }
 
 node_table_t* get_proxy_nodes() {
@@ -69,11 +67,11 @@ node_table_t* get_proxy_nodes() {
 
 void uart_init_tashtalk(void) {
 	printk("Initializing TashTalk...\n");
-	//char init[1024] = { 0 };
+	char init[1024] = { 0 };
 	uart_write_node_table(&node_table_packet);
+	
 	for (size_t i = 0; i < 1024; i++) {
-		//uart_poll_out(uart_dev, init[i]);
-		uart_poll_out(uart_dev, '\0');
+		uart_poll_out(uart_dev, init[i]);
 	}
 	//uart_tx(uart_dev, init, 1024, SYS_FOREVER_US);
 	printk("TashTalk Initialized.\n");
@@ -124,47 +122,14 @@ void uart_init(void) {
 		.parity = UART_CFG_PARITY_NONE,
 		.data_bits = UART_CFG_DATA_BITS_8,
 		.stop_bits = UART_CFG_STOP_BITS_1,
-		//.flow_ctrl = UART_CFG_FLOW_CTRL_RTS_CTS,
-		//.flow_ctrl = UART_CFG_FLOW_CTRL_NONE,
+		.flow_ctrl = UART_CFG_FLOW_CTRL_RTS_CTS,
 	};
 
-	//struct device *gpiob = device_get_binding("GPIOB");
-	int ret = gpio_pin_configure_dt(&ttcts, GPIO_INPUT);
-	//ret += gpio_pin_interrupt_configure_dt(&ttcts, GPIO_INT_EDGE_TO_ACTIVE);
-
-	//ret += gpio_pin_configure_dt(&ttcts2, GPIO_INPUT | GPIO_INT_EDGE_BOTH);
-	if (ret != 0) {
-		printk("gpio_pin_configure_dt %d \n", ret);
-	}
-	//gpio_init_callback(&ttcts_int_cb, ttcts_cb, BIT(ttcts.pin));
-	//if (gpio_add_callback(ttcts.port, &ttcts_int_cb) < 0) {
-	//	printk("ttcts cb failed\n");
-	//}
-	printk("Set up ttcts at %s pin %d\n", ttcts.port->name, ttcts.pin);
-	//gpio_pin_enable_callback(gpiob, 14);
-
-
-
 	printk("Configuring UART...\n");
-	//int ret = uart_configure(uart_dev, &uart_config);
-	//if (ret) {
-	//	printk("uart_configure error: %d\n", ret);
-	//}
-	
-
-
-
-  /* Configure CTS Pin as : Alternate function, High Speed, OpenDrain, Pull up */
-/*
-  LL_GPIO_SetPinMode(GPIOB, LL_GPIO_PIN_14, LL_GPIO_MODE_ALTERNATE);
-  LL_GPIO_SetPinSpeed(GPIOB, LL_GPIO_PIN_14, LL_GPIO_SPEED_FREQ_HIGH);
-  LL_GPIO_SetPinOutputType(GPIOB, LL_GPIO_PIN_14, LL_GPIO_OUTPUT_OPENDRAIN);
-  LL_GPIO_SetPinPull(GPIOB, LL_GPIO_PIN_14, LL_GPIO_PULL_UP);
-
-
-
-	LL_USART_SetHWFlowCtrl(USART1, LL_USART_HWCONTROL_RTS);
-*/
+	int ret = uart_configure(uart_dev, &uart_config);
+	if (ret) {
+		printk("uart_configure error: %d\n", ret);
+	}
 
 	/* configure interrupt and callback to receive data */
 	uart_irq_callback_user_data_set(uart_dev, serial_cb, NULL);
@@ -186,7 +151,7 @@ void uart_rx_runloop(void* buffer_pool, void *p2, void *p3) {
 	static const char *TAG = "UART_RX";	
 	printk("uart_rx_runloop started\n");
 	
-	tashtalk_rx_state_t rxstate = {0};
+	tashtalk_rx_state_t rxstate;
 	int ret = init_tashtalk_rx_state(&rxstate, (buffer_pool_t*)buffer_pool, uart_rx_queue);
 	
 	while(1){
@@ -243,7 +208,6 @@ void uart_tx_runloop(void* buffer_pool, void *p2, void *p3) {
 		
 		uart_poll_out(uart_dev, '\x01');
 		for (size_t i = 0; i < packet->length; i++) {
-			while (gpio_pin_get_dt(&ttcts)) {}
 			uart_poll_out(uart_dev, packet->packet[i]);
 		}
 		//uart_tx(uart_dev, "\x01", 1, SYS_FOREVER_US);
@@ -252,7 +216,6 @@ void uart_tx_runloop(void* buffer_pool, void *p2, void *p3) {
 		flash_led_once(LT_TX_LED);
 		
 skip_processing:
-		//printk("bp_relinquish uart\n");
 		bp_relinquish((buffer_pool_t*)buffer_pool, (void**)&packet);
 	}
 }
@@ -260,16 +223,14 @@ skip_processing:
 void uart_start(buffer_pool_t* packet_pool, struct k_msgq *txQueue, struct k_msgq *rxQueue) {
 	uart_rx_queue = rxQueue;
 	uart_tx_queue = txQueue;
-	k_tid_t uart_rx_thread = k_thread_create(&uart_rx_task, uart_rx_stack,
+	k_thread_create(&uart_rx_task, uart_rx_stack,
 			K_THREAD_STACK_SIZEOF(uart_rx_stack),
 			uart_rx_runloop,
 			(void*)packet_pool, NULL, NULL,
 			THREAD_UART_RX_PRIORITY, 0, K_NO_WAIT);
-	k_thread_name_set(uart_rx_thread, "uart_rx");
-	k_tid_t uart_tx_thread = k_thread_create(&uart_tx_task, uart_tx_stack,
+	k_thread_create(&uart_tx_task, uart_tx_stack,
 			K_THREAD_STACK_SIZEOF(uart_tx_stack),
 			uart_tx_runloop,
 			(void*)packet_pool, NULL, NULL,
 			THREAD_UART_TX_PRIORITY, 0, K_NO_WAIT);
-	k_thread_name_set(uart_tx_thread, "uart_tx");
 }

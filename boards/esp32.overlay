@@ -1,0 +1,143 @@
+/ {
+	chosen {
+	     zephyr,console = &uart0;
+	};
+
+	leds {
+		compatible= "gpio-leds";
+
+		wifi_red_led: wifi_red_led {
+			gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+			label = "WiFi red LED";
+		};
+
+		wifi_green_led: wifi_green_led {
+			gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
+			label = "WiFi green LED";
+		};
+
+		udp_red_led: udp_red_led {
+			gpios = <&gpio0 27 GPIO_ACTIVE_HIGH>;
+			label = "UDP red LED";
+		};
+
+		udp_tx_led: udp_tx_led {
+			gpios = <&gpio0 12 GPIO_ACTIVE_HIGH>;
+			label = "UDP TX LED";
+		};
+
+		udp_rx_led: udp_rx_led {
+			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+			label = "UDP RX LED";
+		};
+
+		lt_red_led: lt_red_led {
+			gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
+			label = "LT red LED";
+		};
+
+		lt_tx_led: lt_tx_led {
+			gpios = <&gpio0 26 GPIO_ACTIVE_HIGH>;
+			label = "LT TX LED";
+		};
+
+		lt_rx_led: lt_rx_led {
+			gpios = <&gpio0 25 GPIO_ACTIVE_HIGH>;
+			label = "LT RX LED";
+		};
+
+		oh_no_led: oh_no_led {
+			gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+			label = "Oh no! LED";
+		};
+
+		generic_err_led: generic_err_led {
+			gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+			label = "Generic error LED";
+		};
+
+		generic_act_led: generic_act_led {
+			gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+			label = "Generic activity LED";
+		};
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		recoverybutton: recovery_button {
+			gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
+			label = "Recovery Button";
+		};
+	};
+
+	aliases {
+		wifi-red-led = &wifi_red_led;
+		wifi-green-led = &wifi_green_led;
+		udp-red-led = &udp_red_led;
+		udp-tx-led = &udp_tx_led;
+		udp-rx-led = &udp_rx_led;
+		lt-red-led = &lt_red_led;
+		lt-tx-led = &lt_tx_led;
+		lt-rx-led = &lt_rx_led;
+		oh-no-led = &oh_no_led;
+		generic-err-led = &generic_err_led;
+		generic-act-led = &generic_act_led;
+
+		recoverybutton = &recoverybutton;
+
+		uart-tt = &uart2;
+	};
+};
+
+&pinctrl {
+	uart_tt: uart_tt {
+		group1 {
+			pinmux = <UART2_TX_GPIO15>;
+		};
+		group2 {
+			pinmux = <UART2_RX_GPIO13>;
+			bias-pull-up;
+		};
+		group3 {
+			pinmux = <UART2_RTS_GPIO5>;
+			bias-pull-up;
+			drive-open-drain;
+		};
+		group4 {
+			pinmux = <UART2_CTS_GPIO2>;
+			bias-pull-up;
+			drive-open-drain;
+		};
+	};
+};
+/*
+        uart1_rx_gpio15: uart1_rx_gpio15 {
+                pinmux = <UART1_RX_GPIO13>;
+        };
+
+        uart1_tx_gpio13: uart1_tx_gpio13 {
+                pinmux = <UART1_TX_GPIO15>;
+                bias-pull-up;
+        };
+
+	uart1_rts_gpio5: uart1_rts_gpio5 {
+                pinmux = <UART1_RX_GPIO5>;
+                bias-pull-up;
+		drive-open-drain;
+	};
+
+	uart1_cts_gpio2: uart1_rts_gpio2 {
+                pinmux = <UART1_RX_GPIO2>;
+                bias-pull-up;
+		drive-open-drain;
+	};
+*/
+
+&uart2 {
+	status = "okay";
+	current-speed = <1000000>;
+	pinctrl-0 = <&uart_tt>;
+	hw-flow-control;
+};
+
+//        pinctrl-0 = <&uart1_tx_gpio13 &uart1_rx_gpio15 &uart1_rts_gpio5 &uart1_cts_gpio2>;

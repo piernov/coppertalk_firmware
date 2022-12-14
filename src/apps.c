@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "esp_system.h"
+#include "esp_log.h"
+
 #include "apps.h"
 #include "scan_manager.h"
 #include "buffer_pool.h"
@@ -26,12 +29,11 @@ struct k_msgq *qToUDP = NULL;
 buffer_pool_t* buffer_pool;
 
 struct k_thread apps_task;
-K_THREAD_STACK_DEFINE(apps_stack, 512);
+K_THREAD_STACK_DEFINE(apps_stack, 4096);
 
 void send_fake_nbp_LkUpReply(uint8_t node, uint8_t socket, uint8_t enumerator,
 	uint8_t nbp_id, char* object, char* type, char* zone) {
 
-	//printk("send_fake_nbp_LkUpReply %d\n", buffer_pool);
 	llap_packet* packet = bp_fetch(buffer_pool);
 	if (packet == NULL) {
 		// um I don't know what to do, let's bail out and hope it goes away
@@ -177,8 +179,8 @@ bool handle_configuration_packet(llap_packet* packet) {
 	pstrncpy(ssid, payload+14, 63);
 	pstrncpy(passwd, payload + 14 + pstrlen(payload+14)+1, 63);
 	
-	printk("wifi config request r'd, ssid: %s, pass: %s\n", ssid, passwd);
-	//store_wifi_details(ssid, passwd);
+	ESP_LOGI(TAG, "wifi config request r'd, ssid: %s, pass: %s", ssid, passwd);
+	store_wifi_details(ssid, passwd);
 	sys_reboot(SYS_REBOOT_WARM);
 	
 	// we never actually return but C wants us to pretend
@@ -192,13 +194,12 @@ void apps_runloop(void *p1, void *p2, void *p3) {
 	while(1) {
 		if (!k_msgq_get(qFromUART, &packet, K_FOREVER)) {
 			if (is_our_nbp_lkup(packet, "AirTalkAP", &nbp_addr)) {
-				printk("nbp lkup\n");
+				ESP_LOGI(TAG, "nbp lkup");
 				//FIXME: Unsupported for now in Zephyr port
 				//scan_and_send_results(nbp_addr.node, nbp_addr.socket, nbp_addr.nbp_id);
 			}
 			
 			if (handle_configuration_packet(packet)) {
-				//printk("bp_relinquish apps 2\n");
 				bp_relinquish(buffer_pool, (void**)&packet);
 				continue;
 			}
@@ -216,10 +217,9 @@ void start_apps(buffer_pool_t* packet_pool, struct k_msgq *fromUART,
 	qToUDP = toUDP;
 	buffer_pool = packet_pool;
 	
-        k_tid_t apps_thread = k_thread_create(&apps_task, apps_stack,
+        k_thread_create(&apps_task, apps_stack,
                         K_THREAD_STACK_SIZEOF(apps_stack),
                         apps_runloop,
                         (void*)packet_pool, NULL, NULL,
                         THREAD_APPS_PRIORITY, 0, K_NO_WAIT);
-	k_thread_name_set(apps_thread, "apps");
 }

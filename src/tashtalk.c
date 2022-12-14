@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <time.h>
 
+#include "esp_log.h"
+
 #include "tashtalk.h"
 #include "packet_types.h"
 #include "crc.h"
@@ -44,7 +46,6 @@ void do_something_sensible_with_packet(tashtalk_rx_state_t* state) {
 	uint8_t destination = llap_destination_node(state->packet_in_progress);
 	if (destination != 255) {
 		if (!nt_fresh(destinations, destination, 3600)) {
-			//printk("bp_relinquish tt 1 %d %d\n", state->buffer_pool, state->packet_in_progress);
 			bp_relinquish(state->buffer_pool, (void**)&state->packet_in_progress);
 			return;
 		}
@@ -61,7 +62,6 @@ void feed(tashtalk_rx_state_t* state, unsigned char byte) {
 	// do we have a buffer?
 	if (state->packet_in_progress == NULL) {
 		//printk("->0.1\n");
-		//printk("bp_fetch feed %d\n", state->buffer_pool);
 		state->packet_in_progress = bp_fetch(state->buffer_pool);
 		//printk("->0.2\n");
 		crc_state_init(&state->crc);
@@ -72,7 +72,6 @@ void feed(tashtalk_rx_state_t* state, unsigned char byte) {
 	// buggered if I know what else to do here other than go in circles
 	while (state->packet_in_progress == NULL) {
 		k_msleep(10);
-		//printk("bp_fetch feed2 %d\n", state->buffer_pool);
 		state->packet_in_progress = bp_fetch(state->buffer_pool);
 		crc_state_init(&state->crc);
 		printk("around and around and around we go\n");
@@ -106,7 +105,6 @@ void feed(tashtalk_rx_state_t* state, unsigned char byte) {
 					state->packet_in_progress->length);
 				flash_led_once(LT_RED_LED);
 				
-				//printk("bp_relinquish tt 2\n");
 				bp_relinquish(state->buffer_pool, (void**) &state->packet_in_progress);
 				state->packet_in_progress = NULL;
 				break;
@@ -117,7 +115,6 @@ void feed(tashtalk_rx_state_t* state, unsigned char byte) {
 					state->packet_in_progress->length);
 				flash_led_once(LT_RED_LED);
 				
-				//printk("bp_relinquish tt 3\n");
 				bp_relinquish(state->buffer_pool, (void**) &state->packet_in_progress);
 				state->packet_in_progress = NULL;
 				break;			
