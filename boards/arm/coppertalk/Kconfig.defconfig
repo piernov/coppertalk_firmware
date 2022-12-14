@@ -1,0 +1,11 @@
+# CopperTalk board configuration
+
+# Copyright (c) 2022 piernov
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_COPPERTALK
+
+config BOARD
+	default "coppertalk"
+
+endif # BOARD_COPPERTALK

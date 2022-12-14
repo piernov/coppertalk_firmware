@@ -1,0 +1,222 @@
+/*
+ * Copyright (c) 2017 Linaro Limited
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <st/f1/stm32f107Xc.dtsi>
+#include <st/f1/stm32f107r(b-c)tx-pinctrl.dtsi>
+
+/ {
+	model = "CopperTalk board";
+	compatible = "coppertalk";
+
+	chosen {
+		zephyr,console = &usart1;
+		zephyr,shell-uart = &usart1;
+		//zephyr,console = &cdc_acm_uart0;
+		//zephyr,shell-uart = &cdc_acm_uart0;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+	};
+
+	gpio_keys {
+		compatible="gpio-keys";
+		ttcts: tt_cts {
+			label = "TT_CTS";
+			gpios = <&gpiob 14 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		};
+		
+	};
+
+	leds {
+		compatible= "gpio-leds";
+
+		oh_no_led: oh_no_led {
+			gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>;
+			label = "Oh no! LED";
+		};
+
+		wifi_red_led: wifi_red_led {
+			gpios = <&gpiob 1 GPIO_ACTIVE_HIGH>;
+			label = "WiFi red LED";
+		};
+
+		wifi_green_led: wifi_green_led {
+			gpios = <&gpiob 2 GPIO_ACTIVE_HIGH>;
+			label = "WiFi green LED";
+		};
+
+		lt_red_led: lt_red_led {
+			gpios = <&gpiob 3 GPIO_ACTIVE_HIGH>;
+			label = "LT red LED";
+		};
+
+		lt_rx_led: lt_rx_led {
+			gpios = <&gpiob 4 GPIO_ACTIVE_HIGH>;
+			label = "LT RX LED";
+		};
+
+		lt_tx_led: lt_tx_led {
+			gpios = <&gpiob 5 GPIO_ACTIVE_HIGH>;
+			label = "LT TX LED";
+		};
+
+		udp_red_led: udp_red_led {
+			gpios = <&gpiob 6 GPIO_ACTIVE_HIGH>;
+			label = "UDP red LED";
+		};
+
+		udp_rx_led: udp_rx_led {
+			gpios = <&gpiob 7 GPIO_ACTIVE_HIGH>;
+			label = "UDP RX LED";
+		};
+
+		udp_tx_led: udp_tx_led {
+			gpios = <&gpiob 8 GPIO_ACTIVE_HIGH>;
+			label = "UDP TX LED";
+		};
+
+		generic_err_led: generic_err_led {
+			gpios = <&gpiob 9 GPIO_ACTIVE_HIGH>;
+			label = "Generic error LED";
+		};
+
+		generic_act_led: generic_act_led {
+			gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>;
+			label = "Generic activity LED";
+		};
+	};
+
+	aliases {
+		wifi-red-led = &wifi_red_led;
+		wifi-green-led = &wifi_green_led;
+		udp-red-led = &udp_red_led;
+		udp-tx-led = &udp_tx_led;
+		udp-rx-led = &udp_rx_led;
+		lt-red-led = &lt_red_led;
+		lt-tx-led = &lt_tx_led;
+		lt-rx-led = &lt_rx_led;
+		oh-no-led = &oh_no_led;
+		generic-err-led = &generic_err_led;
+		generic-act-led = &generic_act_led;
+
+		tt-cts = &ttcts;
+		uart-tt = &usart3;
+		uart-usb = &usart1;
+	};
+};
+
+&clk_hse {
+	status = "okay";
+	clock-frequency = <DT_FREQ_M(25)>; /* 25MHz crystal */
+};
+
+&pll2 {
+	status = "okay";
+	clocks = <&clk_hse>;
+	prediv = <5>; /* Prediv2 */
+	mul = <8>; /* PLL2Mul */
+};
+
+&pll {
+	status = "okay";
+	clocks = <&pll2>; /* Prediv1 Source Mux */
+	prediv = <5>; /* Prediv1 */
+	mul = <9>; /* PLLMul */
+};
+
+&rcc {
+	status = "okay";
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(72)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <2>;
+	apb2-prescaler = <1>;
+};
+
+&usart1 {
+	status = "okay";
+	pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+};
+
+&usart3 {
+	status = "okay";
+	//pinctrl-0 = <&usart3_tx_remap1_pc10 &usart3_rx_remap1_pc11 &usart3_rts_pb14 &usart3_cts_pb13>;
+	//pinctrl-0 = <&usart3_tx_remap1_pc10 &usart3_rx_remap1_pc11 &usart3_rts_pb14>;
+	pinctrl-0 = <&usart3_tx_remap1_pc10 &usart3_rx_remap1_pc11>;
+	pinctrl-names = "default";
+	current-speed = <1000000>;
+	//hw-flow-control;
+};
+
+
+
+&dma1 {
+	status = "okay";
+};
+
+&mac {
+	status = "okay";
+	pinctrl-0 = <&eth_mdc_pc1
+		     &eth_rxd0_pc4
+		     &eth_rxd1_pc5
+		     &eth_ref_clk_pa1
+		     &eth_mdio_pa2
+		     &eth_crs_dv_pa7
+		     &eth_tx_en_pb11
+		     &eth_txd0_pb12
+		     &eth_txd1_pb13
+		     &mco1_pa8>;
+	pinctrl-names = "default";
+};
+/*
+zephyr_udc0: &usbotg_fs {
+	status = "okay";
+	pinctrl-0 = <&usb_otg_fs_dm_pa11 &usb_otg_fs_dp_pa12>;
+	pinctrl-names = "default";
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+*/
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Set 2KB of storage at the end of 256KB flash */
+		storage_partition: partition@1f800 {
+			label = "storage";
+			reg = <0x0003f800 0x00000800>;
+		};
+	};
+};
+
+/* GD32F107RCT6 has 96k of SRAM instead of 64k */
+&sram0 {
+	reg = <0x20000000 DT_SIZE_K(96)>;
+};
+
+&gpioa {
+    pinctrl-0 = <&mco1_pa8>;
+    pinctrl-names = "default";
+};
+
+&pinctrl {
+	mco1_pa8: mco1_pa8 {
+		pinmux = <STM32F1_PINMUX('A', 8, ALTERNATE, NO_REMAP)>;
+		slew-rate = "max-speed-50mhz";
+	};
+
+	/* Free up PB3/PB4 by disabling JTAG debugging since it is not supported on the board */
+	swj-cfg = "jtag-disable";
+};
